@@ -1,72 +1,6 @@
-import sys
-import math
 import random
-
-
-def mod(base, exp, modulus):
-    return pow(base, exp, modulus)
-
-
-def encode(plan_text):
-    byte_array = bytearray(plan_text, 'utf-16')
-    z = []
-    k = INT_BITS // 8
-    j = -1 * k
-    for x in range(len(byte_array)):
-        if x % k == 0:
-            j += k
-            z.append(0)
-        z[j // k] += byte_array[i] * (2 ** (8 * (x % k)))
-    return z
-
-
-def encrypt(p_num, g_num, h_num, plan_text):
-    z = encode(plan_text)
-    cipher_pairs = []
-    for x in z:
-        y = random.randint(0, p_num)
-        c = mod(g_num, y, p_num)
-        d = (x * mod(h_num, y, p_num)) % p_num
-        cipher_pairs.append([c, d])
-
-    encrypted_msg = ""
-    for pair in cipher_pairs:
-        encrypted_msg += str(pair[0]) + ' ' + str(pair[1]) + ' '
-
-    return encrypted_msg
-
-
-def decode(plain_msg):
-    bytes_array = []
-    k = INT_BITS // 8
-    for num in plain_msg:
-        for x in range(k):
-            temp = num
-
-            for j in range(x + 1, k):
-                temp = temp % (2 ** (8 * j))
-
-            letter = temp // (2 ** (8 * x))
-            bytes_array.append(letter)
-            num = num - (letter * (2 ** (8 * x)))
-
-    decoded_msg = bytearray(b for b in bytes_array).decode("utf-8", "ignore")
-    return decoded_msg
-
-
-def decrypt(key_p, key_n, encrypted):
-    plaintext = []
-    encrypted_arr = encrypted.split()
-    for x in range(0, len(encrypted_arr), 2):
-        c = int(encrypted_arr[x])
-        d = int(encrypted_arr[x + 1])
-        s = mod(c, key_n, key_p)
-        plain = (d * mod(s, key_p - 2, key_p)) % key_p
-        plaintext.append(plain)
-
-    decrypted_message = decode(plaintext)
-    decrypted_message = "".join([ch for ch in decrypted_message if ch != '\x00'])
-    return decrypted_message
+import math
+import sys
 
 
 def gcd(a, b):
@@ -75,186 +9,230 @@ def gcd(a, b):
     return a
 
 
+def mod(base, exp, modulus):
+    return pow(base, exp, modulus)
+
+
 def mul_inv(a, b):
     b0 = b
     x0, x1 = 0, 1
-
-    if b == 1:
-        return 1
-
+    if b == 1: return 1
     while a > 1:
-        q_num = a / b
+        q = a / b
         a, b = b, a % b
-        x0, x1 = x1 - q_num * x0, x0
-
-    if x1 < 0:
-        x1 += b0
-
+        x0, x1 = x1 - q * x0, x0
+    if x1 < 0: x1 += b0
     return x1
 
 
-def generate_signature(key_p, key_g, n_num, message):
+def encode(plain_text_string, NUM_BITS):
+    byte_array = bytearray(plain_text_string, 'utf-16')
+    z = []
+    k = NUM_BITS // 8
+    j = -1 * k
+    for i in range(len(byte_array)):
+        if i % k == 0:
+            j += k
+            z.append(0)
+
+        z[j // k] += byte_array[i] * (2 ** (8 * (i % k)))
+
+    return z
+
+
+def decode(plain_text, NUM_BITS):
+    bytes_array = []
+    k = NUM_BITS // 8
+
+    for num in plain_text:
+        for i in range(k):
+            temp = num
+
+            for j in range(i + 1, k):
+                temp = temp % (2 ** (8 * j))
+
+            letter = temp // (2 ** (8 * i))
+            bytes_array.append(letter)
+            num = num - (letter * (2 ** (8 * i)))
+
+    decodedText = bytearray(b for b in bytes_array).decode("utf-8", "ignore")
+
+    return decodedText
+
+
+def encrypt(p, g, x, h, NUM_BITS, plain_text_string):
+    z = encode(plain_text_string, NUM_BITS)
+    cipher_pairs = []
+    for i in z:
+        y = random.randint(0, p)
+        c = mod(g, y, p)
+        d = (i * mod(h, y, p)) % p
+        cipher_pairs.append([c, d])
+
+    encrypted_str = ""
+    for pair in cipher_pairs:
+        encrypted_str += str(pair[0]) + ' ' + str(pair[1]) + ' '
+
+    return encrypted_str
+
+
+def decrypt(keyp, keyx, cipher):
+    plaintext = []
+    cipher_array = cipher.split()
+
+    for i in range(0, len(cipher_array), 2):
+        c = int(cipher_array[i])
+        d = int(cipher_array[i + 1])
+        s = mod(c, keyx, keyp)
+        plain = (d * mod(s, keyp - 2, keyp)) % keyp
+        plaintext.append(plain)
+
+    decrypted_text = decode(plaintext, 256)
+    decrypted_text = "".join([ch for ch in decrypted_text if ch != '\x00'])
+
+    return decrypted_text
+
+
+def signature_generate(p, g, x, m):
     while 1:
-        k = random.randint(1, key_p - 2)
-        if gcd(k, key_p - 1) == 1:
+        k = random.randint(1, p - 2)
+        if gcd(k, p - 1) == 1:
             break
+    r = pow(g, k, p)
+    l = mul_inv(k, p - 1)
+    s = l * (m - x * r) % (p - 1)
+    return r, s
 
-    r_side = pow(key_g, k, key_p)
-    l_side = mul_inv(k, key_p - 1)
-    s = l_side * (message - n_num * r_side) % (key_p - 1)
-    return r_side, s
 
-
-def check_signature(key_p, key_g, key_n, r_num, s_num, message):
-    if r_num < 1 or r_num > key_p - 1:
+def signature_version(p, a, y, r, s, m):
+    if r < 1 or r > p - 1:
         return False
-    compare_1 = pow(key_n, r_num, key_p) % key_p * pow(r_num, s_num, key_p) % key_p
-    compare_2 = pow(key_g, message, key_p)
-    return compare_1 == compare_2
+
+    v1 = pow(y, r, p) % p * pow(r, s, p) % p
+    v2 = pow(a, m, p)
+
+    return v1 == v2
 
 
-INT_BITS = 256
+public_key_p = ''
+public_key_g = ''
+public_key_y = ''
+sign_r = ''
+sign_s = ''
+msg = ''
+private_key_p = ''
+private_key_g = ''
+private_key_x = ''
+public_key_h = ''
+message = ''
 if __name__ == '__main__':
     arg = sys.argv[1]
-    p = ''
-    g = ''
-    key_private_p = ''
-    key_private_g = ''
-    key_private_n = ''
-    key_public = ''
 
-    if arg == "-k":  # read p and g from file and generate keys
-        file = open("elgamal.txt")
-        for i, line in enumerate(file):
-            if i == 0:
-                p = int(line.rstrip())
-            elif i == 1:
-                g = int(line.rstrip())
-        file.close()
+    if arg == "-k":
+        elgamar_file = open("elgamal.txt", "r")
+        p = ''
+        g = ''
 
-        rand = random.randint(1, p)
-        n = mod(g, rand, p)
+        for row, line in enumerate(elgamar_file):
+            if row == 0:
+                p = int(line)
+            elif row == 1:
+                g = int(line)
 
-        file_private = open("private.txt", "w")
-        file_private.write('%s\n' % (str(p)))  # p
-        file_private.write('%s\n' % (str(g)))  # g
-        file_private.write('%s\n' % (str(rand)))  # rand
-        file_private.close()
+        x = random.randint(1, p)
+        h = mod(g, x, p)
+        
+        private_file = open("private.txt", "w")
+        private_file.write('%s\n%s\n%s' % (str(p), str(g), str(x)))
+        public_file = open("public.txt", "w")
+        public_file.write('%s\n%s\n%s' % (str(p), str(g), str(h)))
 
-        file_public = open("public.txt", "w")
-        file_public.write('%s\n' % (str(p)))  # p
-        file_public.write('%s\n' % (str(g)))  # g
-        file_public.write('%s\n' % (str(n)))  # n
-        file_public.close()
+    elif arg == "-e":
+        public_file = open("public.txt", "r")
 
-    elif arg == "-e":  # read public key, plain message and save encrypted message
-        file_public = open("public.txt", "r")
-        for i, line in enumerate(file_public):
-            if i == 2:
-                key_public = int(line.rstrip())
+        for row, line in enumerate(public_file):
+            if row == 2:
+                public_key_h = int(line)
 
-        file_public.close()
+        private_file = open("private.txt", "r")
 
-        file_private = open("private.txt", "r")
-        for i, line in enumerate(file_private):
-            if i == 0:
-                key_private_p = int(line.rstrip())
-            if i == 1:
-                key_private_g = int(line.rstrip())
-            if i == 2:
-                key_private_n = int(line.rstrip())
+        for row, line in enumerate(private_file):
+            if row == 0:
+                private_key_p = int(line)
+            if row == 1:
+                private_key_g = int(line)
+            if row == 2:
+                private_key_x = int(line)
 
-        file_private.close()
+        NUM_BITS = 256
+        
+        plain_file = open("plain.txt", "r")
+        for line in plain_file:
+            message = str(line)
 
-        file_plain = open("plain.txt", "r")
-        msg = ''
-        for line in file_plain:
-            msg = str(line)
+        cipher = encrypt(private_key_p, private_key_g, private_key_x, public_key_h, NUM_BITS, message)
+        crypto_file = open("crypto.txt", "w")
+        crypto_file.write('%s' % (str(cipher)))
 
-        cipher = encrypt(key_private_p, key_private_g, key_public, msg)
-        encrypt_file = open("crypto.txt", "w")
-        encrypt_file.write('%s' % (str(cipher)))
+    elif arg == "-d":
+        cipher = ''
+        private_file = open("private.txt", "r")
+        for row, line in enumerate(private_file):
+            if row == 0:
+                private_key_p = int(line)
+            if row == 2:
+                private_key_x = int(line)
 
-    elif arg == "-d":  # read private key and encrypted message and try to decrypt
-        file_private = open("private.txt", "r")
-        for i, line in enumerate(file_private):
-            if i == 0:
-                key_private_p = int(line.rstrip())
-            if i == 2:
-                key_private_n = int(line.rstrip())
-
-        file_private.close()
-
-        decrypted_msg = ''
         crypto_file = open("crypto.txt", "r")
+
         for line in crypto_file:
-            decrypted_msg = str(line.rstrip())
+            cipher = str(line)
 
-        decrypted = u''.join((decrypt(key_private_p, key_private_n, decrypted_msg))).encode('utf-8').strip()
+        decrypted = u''.join((decrypt(private_key_p, private_key_x, cipher))).encode('utf-8').strip()
         decrypted = str(decrypted, 'utf-8')
+        edecrypt = open("decrypt.txt", "w")
+        edecrypt.write('%s' % decrypted)
 
-        file_decrypt = open("decrypt.txt", "w")
-        file_decrypt.write('%s' % decrypted)
-        file_decrypt.close()
+    elif arg == "-s":
+        private_file = open("private.txt", "r")
+        for row, line in enumerate(private_file):
+            if row == 0:
+                private_key_p = int(line)
+            if row == 1:
+                private_key_g = int(line)
+            if row == 2:
+                private_key_x = int(line)
 
-    elif arg == "-s":  # read private key, message and produce signature
-        file_private = open("private.txt", "r")
-        for i, line in enumerate(file_private):
-            if i == 0:
-                key_private_p = int(line.rstrip())
-            if i == 1:
-                key_private_g = int(line.rstrip())
-            if i == 2:
-                key_private_n = int(line.rstrip())
+        message = open("message.txt", "r")
+        for line in message:
+            msg = int(line)
+        rr, ss = signature_generate(private_key_p, private_key_g, private_key_x, msg)
+        signature_file = open("signature.txt", "w")
+        signature_file.write('%s\n%s' % (str(rr), int(ss)))
 
-        file_private.close()
-
-        file_message = open("message.txt", "r")
-        msg = ''
-        for line in file_message:
-            msg = int(line.rstrip())
-
-        file_message.close()
-
-        q, w = generate_signature(key_private_p, key_private_g, key_private_n, msg)
-        file_signature = open("signature.txt", "w")
-        file_signature.write('%d\n' % (int(q)))
-        file_signature.write('%d' % (int(w)))
-
-    elif arg == "-v":  # verify signature
-        signature_r = ''
-        signature_s = ''
-        file_signature = open("signature.txt", "r")
-        for i, line in enumerate(file_signature):
-            if i == 0:
-                signature_r = int(line.rstrip())
-            if i == 1:
-                signature_s = int(line.rstrip())
-
-        file_signature.close()
-
-        msg = ''
-        file_message = open("message.txt", "r")
-        for line in file_message:
-            msg = int(line.rstrip())
-
-        file_message.close()
-
-        key_public_p = ''
-        key_public_g = ''
-        key_public_n = ''
-        file_public = open("public.txt", "r")
-        for i, line in enumerate(file_public):
-            if i == 0:
-                key_public_p = int(line.rstrip())
-            if i == 1:
-                key_public_g = int(line.rstrip())
-            if i == 2:
-                key_public_n = int(line.rstrip())
-
-        file_public.close()
-
-        is_valid = check_signature(key_public_p, key_public_g, key_public_n, signature_r, signature_r, msg)
-        file_verify = open("verify.txt", "w")
-        file_verify.write('Verify: %s' % is_valid)
-        print("Verify: %s" % is_valid)
+    elif arg == "-v":
+        signature_file = open("signature.txt", "r")
+        for row, line in enumerate(signature_file):
+            if row == 0: 
+                sign_r = int(line)
+            if row == 1: 
+                sign_s = int(line)
+                
+        message = open("message.txt", "r")
+        
+        for line in message:
+            msg = int(line)
+            
+        public_file = open("public.txt", "r")
+        for row, line in enumerate(public_file):
+            if row == 0: 
+                public_key_p = int(line)
+            if row == 1: 
+                public_key_g = int(line)
+            if row == 2: 
+                public_key_y = int(line)
+                
+        is_signature_valid = signature_version(public_key_p, public_key_g, public_key_y, sign_r, sign_s, msg)
+        verify = open("verify.txt", "w")
+        verify.write('Verification: %s' % is_signature_valid)
+        print("Verification: %s" % is_signature_valid)
