@@ -53,7 +53,7 @@ def decode(plain_text):
 
 
 def encode(plain_text_string):
-    byte_arr = bytearray(plain_text_string, 'utf-16')
+    byte_arr = bytearray(plain_text_string, 'utf-8')
     arr = []
     k = NUM_BITS // 8
     j = -1 * k
